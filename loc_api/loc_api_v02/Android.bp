@@ -50,4 +50,10 @@ cc_library_shared {
         "-fno-short-enums",
         "-D_ANDROID_",
     ] + GNSS_CFLAGS,
+
+    // As Qualcomm's own build of this library: it decodes the modem's QMI LOC
+    // messages. CFI comes from the device's CFI_INCLUDE_PATHS.
+    sanitize: {
+        integer_overflow: true,
+    },
 }
