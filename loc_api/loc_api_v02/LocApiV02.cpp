@@ -1219,6 +1219,64 @@ void LocApiV02::injectPositionAndCivicAddress(const Location& location,
 
 }
 
+/* Inject an XTRA file in parts of at most QMI_LOC_MAX_XTRA_PART_LEN_V02 bytes.
+   Each part waits for its indication and the first failure ends the injection,
+   so the engine never gets the rest of a file it has already rejected. */
+void LocApiV02::injectXtraData(const std::vector<uint8_t>& data)
+{
+    sendMsg(new LocApiMsg([this, data] () {
+    const size_t totalSize = data.size();
+    const size_t totalParts =
+            (totalSize + QMI_LOC_MAX_XTRA_PART_LEN_V02 - 1) / QMI_LOC_MAX_XTRA_PART_LEN_V02;
+    if (0 == totalSize || totalParts > UINT16_MAX) {
+        LOC_LOGe("XTRA data of %zu bytes not injected", totalSize);
+        return;
+    }
+
+    qmiLocInjectXtraDataReqMsgT_v02 req;
+    qmiLocInjectXtraDataIndMsgT_v02 ind;
+    locClientReqUnionType reqUnion = {};
+    reqUnion.pInjectXtraDataReq = &req;
+    locClientStatusEnumType status = eLOC_CLIENT_SUCCESS;
+    size_t offset = 0;
+    size_t part = 1;
+
+    for (; part <= totalParts; part++) {
+        memset(&req, 0, sizeof(req));
+        req.totalSize = static_cast<uint32_t>(totalSize);
+        req.totalParts = static_cast<uint16_t>(totalParts);
+        req.partNum = static_cast<uint16_t>(part);
+        req.partData_len = static_cast<uint32_t>(
+                std::min(totalSize - offset, (size_t)QMI_LOC_MAX_XTRA_PART_LEN_V02));
+        memcpy(req.partData, data.data() + offset, req.partData_len);
+        req.formatType_valid = 1;
+        req.formatType = eQMI_LOC_XTRA_DATA_V02;
+
+        memset(&ind, 0, sizeof(ind));
+        // Not locSyncSendReq: it queues a part the busy engine refused for a later
+        // resend, which would hand the engine an incomplete file.
+        status = loc_sync_send_req(clientHandle, QMI_LOC_INJECT_XTRA_DATA_REQ_V02, reqUnion,
+                                   LOC_ENGINE_SYNC_REQUEST_TIMEOUT,
+                                   QMI_LOC_INJECT_XTRA_DATA_IND_V02, &ind);
+        if (eLOC_CLIENT_SUCCESS != status || eQMI_LOC_SUCCESS_V02 != ind.status ||
+                (ind.partNum_valid && ind.partNum != req.partNum)) {
+            break;
+        }
+        offset += req.partData_len;
+    }
+
+    if (part <= totalParts) {
+        LOC_LOGe("XTRA injection failed at part %zu of %zu: %s, %s", part, totalParts,
+                 loc_get_v02_client_status_name(status),
+                 loc_get_v02_qmi_status_name(ind.status));
+    } else {
+        LOC_LOGi("XTRA injected: %zu bytes in %zu parts, constellation mask 0x%" PRIx64,
+                 totalSize, totalParts,
+                 ind.ConstellationMask_valid ? (uint64_t)ind.ConstellationMask : 0);
+    }
+    }));
+}
+
 /* delete assistance date */
 void
 LocApiV02::deleteAidingData(const GnssAidingData& data, LocApiResponse *adapterResponse)
