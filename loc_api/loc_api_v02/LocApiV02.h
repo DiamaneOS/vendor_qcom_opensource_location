@@ -578,6 +578,8 @@ public:
   virtual void injectPositionAndCivicAddress(const Location& location,
           const GnssCivicAddress& addr);
 
+  virtual void injectXtraData(const std::vector<uint8_t>& data);
+
   virtual void
     deleteAidingData(const GnssAidingData& data, LocApiResponse *adapterResponse);
 
