@@ -1254,9 +1254,10 @@ void LocApiV02::injectXtraData(const std::vector<uint8_t>& data)
 
         memset(&ind, 0, sizeof(ind));
         // Not locSyncSendReq: it queues a part the busy engine refused for a later
-        // resend, which would hand the engine an incomplete file.
+        // resend, which would hand the engine an incomplete file. The long timeout
+        // gives the engine time to check the whole file after the last part.
         status = loc_sync_send_req(clientHandle, QMI_LOC_INJECT_XTRA_DATA_REQ_V02, reqUnion,
-                                   LOC_ENGINE_SYNC_REQUEST_TIMEOUT,
+                                   LOC_ENGINE_SYNC_REQUEST_LONG_TIMEOUT,
                                    QMI_LOC_INJECT_XTRA_DATA_IND_V02, &ind);
         if (eLOC_CLIENT_SUCCESS != status || eQMI_LOC_SUCCESS_V02 != ind.status ||
                 (ind.partNum_valid && ind.partNum != req.partNum)) {
